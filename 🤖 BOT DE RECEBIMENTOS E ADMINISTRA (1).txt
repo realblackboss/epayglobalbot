@@ -1,0 +1,49 @@
+🤖 BOT DE RECEBIMENTOS E ADMINISTRADORES – EXPLICAÇÃO COMPLETA
+
+Este bot foi desenvolvido para organizar, registrar e gerenciar pedidos de pagamento, recebimentos via Pix/API, saldos acumulados e administradores de equipes. Seguro, prático, multilíngue e pronto para uso profissional.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔹 FUNÇÕES PRINCIPAIS
+
+• Registrar pedidos de pagamento de forma automática (/+ valor).
+• Somar e acompanhar saldos acumulados dos administradores.
+• Gerenciar e listar administradores (ADM e ADM Master).
+• Controlar extratos recebidos via integração com API Pix.
+• Relatório detalhado de desempenho dos ADMs.
+• Suporte multilíngue (PT, EN, ZH e outros).
+• Alertas automáticos de inatividade.
+• Interface prática para equipes e grupos de vendas.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 LISTA DE COMANDOS & FUNÇÕES
+
+/adm ID – Adiciona um novo administrador (apenas ADM Master).
+/adm remove ID – Remove um administrador do sistema (apenas ADM Master).
+/adm lista – Lista todos os administradores atuais.
+/+ valor – Registrar um novo pedido de pagamento (ex: /+ 100).
+/total – Exibe o saldo acumulado dos administradores e dos extratos.
+/limparsaldo – Zera o saldo dos administradores.
+/limparacumulado – Zera o saldo dos extratos recebidos.
+/admtrabalho – Relatório dos ADMs com quantidade de pedidos realizados.
+/passar – Próxima página do relatório de ADMs.
+/voltar – Página anterior do relatório de ADMs.
+/limparadmtrabalho – Zera a contagem de pedidos dos ADMs.
+/setlang pt|en|zh|... – Troca o idioma do bot.
+/about – Exibe informações detalhadas e instruções.
+/masters – Lista os IDs dos ADM Master (apenas ADM Master).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👑 TIPOS DE USUÁRIOS
+
+• ADM MASTER: Controle total do sistema, pode adicionar/remover ADMs e ver relatórios completos.
+• ADM: Pode registrar pedidos, ver saldos e acompanhar o desempenho.
+
+/setlang – Comando multilíngue. Basta enviar: /setlang pt, /setlang zh, /setlang en, etc.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🆘 SUPORTE
+
+Dúvidas, problemas ou sugestões?  
+Acesse: https://suporte.p27pay.com.br
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━

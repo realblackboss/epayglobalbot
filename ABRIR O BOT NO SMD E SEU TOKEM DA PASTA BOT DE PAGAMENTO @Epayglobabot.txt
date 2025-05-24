@@ -1,0 +1,10 @@
+python "C:\Users\ander\OneDrive\Área de Trabalho\ABRIR O BOT NO SMD E SEU TOKEM DA PASTA BOT DE PAGAMENTO Epayglobabot\@Epayglobabot.py"
+
+
+# ======= CONFIGURAÇÕES =======
+BOT_TOKEN = "7857548379:AAHK9-6TZHp03bXHhz6DeLJZgtEGAVFuvWQ"
+API_KEY = "91904044-39d8-441b-8d20-8f38d6d96680"
+SECRET_KEY = "1115afa69a324ef1c8d8c152fd657ad00601591719afa92e36d6863656873648"
+BASE_URL = "https://api.p27pay.com.br"
+LINK_PAGAMENTO = "https://portal.p27pay.com.br/pay/7a4bba9d"
+SUPORTE_CONTATO = "https://suporte.p27pay.com.br"
