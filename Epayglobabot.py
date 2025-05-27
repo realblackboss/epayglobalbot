@@ -1,6 +1,8 @@
 import logging
 import requests
 import asyncio
+import qrcode
+from io import BytesIO
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -344,9 +346,8 @@ TRANSLATIONS = {
     }
 }
 
-
 USER_LANGS_FILE = "user_langs.json"
-SUPPORTED_LANGS = ['pt', 'en', 'zh']  # Defina aqui para sempre ter a variável usada
+SUPPORTED_LANGS = ['pt', 'en', 'zh']
 SUPPORTED_LANGS_EXT = [
     'pt', 'en', 'zh', 'es', 'fr', 'de', 'it', 'ru', 'ar', 'ja', 'ko',
     'hi', 'tr', 'nl', 'pl', 'sv', 'uk', 'vi', 'th', 'he', 'id', 'el', 'fa'
@@ -360,19 +361,17 @@ def load_user_langs():
 
 def save_user_langs(langs):
     with open(USER_LANGS_FILE, "w", encoding="utf-8") as f:
-        json.dump(langs, f, ensure_ascii=False, indent=2)  # Melhor legibilidade
+        json.dump(langs, f, ensure_ascii=False, indent=2)
 
 USER_LANGS = load_user_langs()
 
 def translate_google(text, target_lang):
-    # Nunca traduz para pt, en ou zh (idiomas já suportados nativamente)
     if target_lang in SUPPORTED_LANGS:
         return text
     try:
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target_lang}&dt=t&q={requests.utils.quote(text)}"
         resp = requests.get(url, timeout=6)
         data = resp.json()
-        # data[0][0][0] existe se tradução bem sucedida
         if data and isinstance(data, list) and data[0] and isinstance(data[0], list) and data[0][0]:
             return data[0][0][0]
         return text
@@ -381,17 +380,10 @@ def translate_google(text, target_lang):
         return text
 
 def get_translation(key, lang, format_args=None):
-    """
-    Busca a tradução da chave no idioma desejado, faz fallback para inglês se necessário.
-    Só tenta traduzir via Google Translate se for um idioma não suportado oficialmente.
-    """
     base = TRANSLATIONS.get(key, {})
-    # Fallback seguro: en → pt → primeiro idioma disponível → string placeholder
     translation = base.get(lang) or base.get('en') or base.get('pt') or next(iter(base.values()), f"[MISSING: {key}]")
-    # Para idiomas não oficiais, traduz inglês via Google Translate
     if lang not in SUPPORTED_LANGS:
         translation = translate_google(base.get('en', translation), lang)
-    # Formatação segura
     if format_args:
         try:
             if isinstance(format_args, (list, tuple)):
@@ -421,7 +413,6 @@ async def get_user_language(user):
         logger.error(f"Erro ao detectar idioma: {str(e)}")
     return 'en'
 
-# ========= COMANDO /SETLANG =========
 async def setlang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     user = update.effective_user
@@ -579,7 +570,32 @@ async def monitorar_recebimentos(app):
             logger.error(f"Erro no monitoramento: {str(e)}")
             await asyncio.sleep(60)
 
-# ========= NOVO FLUXO COMANDO /+ =========
+def gerar_pix_p27pay(valor_centavos: int):
+    url = f"{BASE_URL}/api/banking/quote-transaction"
+    headers = {
+        "x-api-key": API_KEY,
+        "x-secret-key": SECRET_KEY,
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "value": valor_centavos,
+        "simulation": False,
+        "receiverAddress": "0xaabaafcd77d1828689bf2f196bb4fe6c9e5e2bb7"
+    }
+    resp = requests.post(url, headers=headers, json=payload, timeout=15)
+    logger.info(f"Status: {resp.status_code} | Resp: {resp.text[:500]}")
+    if resp.status_code not in (200, 201):
+        try:
+            erro = resp.json().get("error", "")
+        except Exception:
+            erro = ""
+        raise Exception(f"Erro {resp.status_code} - {erro or resp.text[:300]}")
+    data = resp.json()
+    qr_copiaecola = data.get("qrCode") or data.get("qr_code") or ""
+    if not qr_copiaecola:
+        raise Exception("Resposta inesperada: campo qrCode não encontrado.")
+    return qr_copiaecola
+
 async def pedido_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global protocolo_counter, ADMIN_IDS, SALDO, ADMTRABALHO
     ADMIN_IDS = load_admins()
@@ -604,13 +620,11 @@ async def pedido_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     SALDO["saldo_adm"] += valor_float
     save_saldos(SALDO)
 
-    # ----- ADICIONA CONTAGEM DE PEDIDOS DO ADM -----
     adm_id = str(user.id)
     if adm_id not in ADMTRABALHO:
         ADMTRABALHO[adm_id] = 0
     ADMTRABALHO[adm_id] += 1
     save_admtrabalho(ADMTRABALHO)
-    # -----------------------------------------------
 
     protocolo_str = f"{protocolo_counter:04d}"
     protocolo_counter += 1
@@ -631,11 +645,30 @@ async def pedido_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🔢 <b>{get_translation('protocol', lang)}:</b> <code>{protocolo_str}</code>\n"
         f"💰 <b>{get_translation('request_amount', lang)}:</b> <code>{valor_formatado}</code>\n\n"
         f"{get_translation('wait_confirmation', lang)}\n\n"
-        f"{get_translation('payment_link', lang).format(LINK_PAGAMENTO)}"
+        "🔗 Clique aqui para acessar o pagamento: <a href='https://t.me/Epayglobabot'>t.me/Epayglobabot</a>"
     )
     await update.message.reply_text(msg, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
-# ========= COMANDO /TOTAL =========
+    try:
+        valor_centavos = int(round(float(valor.replace(",", ".")) * 100))
+        copiaecola = gerar_pix_p27pay(valor_centavos)
+        img = qrcode.make(copiaecola)
+        bio = BytesIO()
+        img.save(bio, format="PNG")
+        bio.seek(0)
+        await context.bot.send_photo(
+            chat_id=user.id,
+            photo=bio,
+            caption=f"<b>Pague com Pix Copia e Cola:</b>\n<code>{copiaecola}</code>",
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception as e:
+        await context.bot.send_message(
+            chat_id=user.id,
+            text=f"Erro ao gerar Pix: {str(e)}",
+            parse_mode=ParseMode.HTML
+        )
+
 async def comando_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     lang = await get_user_language(user)
@@ -648,7 +681,6 @@ async def comando_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.HTML
     )
 
-# ========= COMANDO /LIMPARSALDO =========
 async def comando_limparsaldo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     lang = await get_user_language(user)
@@ -656,7 +688,6 @@ async def comando_limparsaldo(update: Update, context: ContextTypes.DEFAULT_TYPE
     save_saldos(SALDO)
     await update.message.reply_text(get_translation('saldo_adm_limpo', lang), parse_mode=ParseMode.HTML)
 
-# ========= COMANDO /LIMPARACUMULADO =========
 async def comando_limparacumulado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     lang = await get_user_language(user)
@@ -664,7 +695,6 @@ async def comando_limparacumulado(update: Update, context: ContextTypes.DEFAULT_
     save_acumulado_extrato(ACUMULADO_EXTRATO)
     await update.message.reply_text(get_translation('saldo_extrato_limpo', lang), parse_mode=ParseMode.HTML)
 
-# ========= COMANDO /ADMTRABALHO =========
 ADMTRABALHO_PAGINAS = {}
 
 async def comando_admtrabalho(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -688,7 +718,6 @@ async def mostrar_pagina_admtrabalho(update, lang, pagina, user_id):
     for i, adm_id in enumerate(ADM_IDS[start:end], start=1+start):
         adm_id_str = str(adm_id)
         contagem = ADMTRABALHO.get(adm_id_str, 0)
-        # Corrige: se não conseguir buscar, mostra ID mesmo assim
         try:
             if adm_id == 0:
                 raise Exception("ID inválido")
@@ -733,7 +762,6 @@ async def comando_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ADMTRABALHO_PAGINAS[user.id] = pagina
     await mostrar_pagina_admtrabalho(update, lang, pagina, user.id)
 
-# ========= COMANDO /LIMPARADMTRABALHO =========
 async def comando_limparadmtrabalho(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     lang = await get_user_language(user)
@@ -744,7 +772,6 @@ async def comando_limparadmtrabalho(update: Update, context: ContextTypes.DEFAUL
     save_admtrabalho(ADMTRABALHO)
     await update.message.reply_text(get_translation('admtrabalho_limpo', lang), parse_mode=ParseMode.HTML)
 
-# ========= COMANDO /ADM PARA GERENCIAR ADMINISTRADORES =========
 async def comando_adm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global ADMIN_IDS
     ADMIN_IDS = load_admins()
@@ -824,18 +851,14 @@ async def comando_adm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
 
-# ========= COMANDO /ABOUT (MULTILÍNGUE 100% REAL) =========
-
 async def comando_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     lang = await get_user_language(user)
     if lang not in ['pt', 'en', 'zh']:
-        lang = 'en'  # fallback para inglês seguro
+        lang = 'en'
     about_text = get_translation('about', lang)
     await update.message.reply_text(about_text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
-
-# ========= COMANDO /MASTERS =========
 async def comando_masters(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     lang = await get_user_language(user)
